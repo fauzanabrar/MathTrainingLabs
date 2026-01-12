@@ -23,6 +23,10 @@ const STORAGE_KEY = "math-training-state";
 const THEME_KEY = "math-training-theme";
 const SETTINGS_KEY = "math-training-settings";
 const DEFAULT_SETTINGS = { questionCount: 10, timeLimitSeconds: 10 };
+const ADSTERRA_SCRIPT_SRC =
+  "https://pl28463616.effectivegatecpm.com/9c9ea4fbff8dd33e714120c2cb2ec0d5/invoke.js";
+const ADSTERRA_CONTAINER_ID = "container-9c9ea4fbff8dd33e714120c2cb2ec0d5";
+const ADSTERRA_SCRIPT_ID = "adsterra-native-9c9ea4fbff8dd33e714120c2cb2ec0d5";
 
 type Feedback = {
   correct: boolean;
@@ -48,6 +52,38 @@ const createQuestion = (selectedMode: Mode, snapshot: Stats) => {
   const level = snapshot[skill].level;
   return generateQuestion(skill, level);
 };
+
+function AdsterraNativeBanner() {
+  const injectedRef = useRef(false);
+
+  useEffect(() => {
+    if (injectedRef.current || typeof document === "undefined") {
+      return;
+    }
+    const container = document.getElementById(ADSTERRA_CONTAINER_ID);
+    if (!container) {
+      return;
+    }
+    if (document.getElementById(ADSTERRA_SCRIPT_ID)) {
+      injectedRef.current = true;
+      return;
+    }
+    const script = document.createElement("script");
+    script.id = ADSTERRA_SCRIPT_ID;
+    script.async = true;
+    script.setAttribute("data-cfasync", "false");
+    script.src = ADSTERRA_SCRIPT_SRC;
+    const target = container.parentElement ?? document.body;
+    target.appendChild(script);
+    injectedRef.current = true;
+  }, []);
+
+  return (
+    <section className={styles.adSlot} aria-label="Sponsored content">
+      <div id={ADSTERRA_CONTAINER_ID} />
+    </section>
+  );
+}
 
 export default function Home() {
   const [stats, setStats] = useState<Stats>(() => createDefaultStats());
@@ -984,7 +1020,10 @@ export default function Home() {
         </div>
       </header>
 
-      <main className={styles.main}>{content}</main>
+      <main className={styles.main}>
+        {content}
+        <AdsterraNativeBanner />
+      </main>
     </div>
   );
 }

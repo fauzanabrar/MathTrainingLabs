@@ -205,6 +205,20 @@ button:focus-visible {
   gap: 10px;
 }
 
+.adSlot {
+  border: 1px dashed var(--border-strong);
+  border-radius: 16px;
+  background: var(--card-subtle);
+  padding: 12px;
+  display: flex;
+  justify-content: center;
+  min-height: 240px;
+}
+
+.adSlot > div {
+  width: 100%;
+}
+
 .settingsButton {
   flex: 1 1 160px;
   display: flex;
