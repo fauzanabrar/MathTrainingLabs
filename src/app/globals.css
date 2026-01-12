@@ -1,27 +1,42 @@
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --bg: #f5f1ea;
+  --bg-accent: #efe6da;
+  --ink: #1d1a16;
+  --muted: #5c6a72;
+  --card: #fcfaf7;
+  --card-strong: #f6ede1;
+  --card-subtle: #f9f4ec;
+  --border: #e1d6c7;
+  --border-strong: #d4c5b5;
+  --accent: #f26a3d;
+  --accent-strong: #d9572e;
+  --accent-soft: #f5c9b2;
+  --chip-bg: #fff9f2;
+  --chip-text: #6c4630;
+  --input-bg: #fffdf8;
+  --success-bg: #e7f4ea;
+  --success-border: #b7ddc4;
+  --success-text: #1f6a3a;
+  --error-bg: #fff1f1;
+  --error-border: #f1b7b0;
+  --error-text: #a13024;
+  --ad-bg: #fff8ef;
+  --ad-text: #9a6a45;
+  --level-bg: #f5cfbb;
+  --level-text: #8a4a2c;
+  --dot-ok: #45b975;
+  --dot-bad: #ee6b5b;
+  --pill-bg: rgba(242, 106, 61, 0.12);
+  --pill-border: rgba(242, 106, 61, 0.35);
+  --pill-text: #a4411b;
+  --focus-ring: rgba(242, 106, 61, 0.18);
+  --accent-shadow: 0 10px 24px rgba(242, 106, 61, 0.22);
+  --accent-shadow-strong: 0 12px 26px rgba(242, 106, 61, 0.32);
+  --shadow: 0 10px 28px rgba(50, 40, 30, 0.14);
+  --body-bg:
+    radial-gradient(circle at 12% 18%, rgba(255, 206, 160, 0.18), transparent 55%),
+    radial-gradient(circle at 85% 18%, rgba(157, 194, 255, 0.14), transparent 55%),
+    linear-gradient(160deg, #f6f1ea 0%, #f3f0f8 55%, #eef4f7 100%);
 }
 
 * {
@@ -30,13 +45,176 @@ body {
   margin: 0;
 }
 
+html,
+body {
+  min-height: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  color: var(--ink);
+  background: var(--body-bg);
+  font-family: var(--font-sans), "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display), var(--font-sans), "Segoe UI", sans-serif;
+  letter-spacing: -0.02em;
+}
+
 a {
   color: inherit;
   text-decoration: none;
 }
 
+button,
+input,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(242, 106, 61, 0.18);
+}
+
 @media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151311;
+    --bg-accent: #1c1916;
+    --ink: #f2ece6;
+    --muted: #b0a6a0;
+    --card: #1b1916;
+    --card-strong: #221f1b;
+    --card-subtle: #1f1c18;
+    --border: #3b332c;
+    --border-strong: #4a4037;
+    --accent: #ff8a5b;
+    --accent-strong: #ff7648;
+    --accent-soft: #4a2c21;
+    --chip-bg: #2a251f;
+    --chip-text: #e2cbb7;
+    --input-bg: #1b1815;
+    --success-bg: #1d2a22;
+    --success-border: #2f5a3e;
+    --success-text: #8fe3b1;
+    --error-bg: #2c1c1c;
+    --error-border: #6a3a35;
+    --error-text: #f29b93;
+    --ad-bg: #221e19;
+    --ad-text: #d2b39a;
+    --level-bg: #3a2b23;
+    --level-text: #f3c9ae;
+    --dot-ok: #56d58d;
+    --dot-bad: #f4776b;
+    --pill-bg: rgba(255, 138, 91, 0.16);
+    --pill-border: rgba(255, 138, 91, 0.4);
+    --pill-text: #ffd2bf;
+    --focus-ring: rgba(255, 138, 91, 0.25);
+    --accent-shadow: 0 10px 24px rgba(255, 138, 91, 0.2);
+    --accent-shadow-strong: 0 12px 26px rgba(255, 138, 91, 0.28);
+    --shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+    --body-bg:
+      radial-gradient(circle at 15% 15%, rgba(255, 138, 91, 0.08), transparent 55%),
+      radial-gradient(circle at 85% 18%, rgba(120, 160, 255, 0.08), transparent 55%),
+      linear-gradient(160deg, #141311 0%, #1b1916 55%, #151311 100%);
+  }
+
   html {
     color-scheme: dark;
   }
+}
+
+:root[data-theme="light"] {
+  --bg: #f5f1ea;
+  --bg-accent: #efe6da;
+  --ink: #1d1a16;
+  --muted: #5c6a72;
+  --card: #fcfaf7;
+  --card-strong: #f6ede1;
+  --card-subtle: #f9f4ec;
+  --border: #e1d6c7;
+  --border-strong: #d4c5b5;
+  --accent: #f26a3d;
+  --accent-strong: #d9572e;
+  --accent-soft: #f5c9b2;
+  --chip-bg: #fff9f2;
+  --chip-text: #6c4630;
+  --input-bg: #fffdf8;
+  --success-bg: #e7f4ea;
+  --success-border: #b7ddc4;
+  --success-text: #1f6a3a;
+  --error-bg: #fff1f1;
+  --error-border: #f1b7b0;
+  --error-text: #a13024;
+  --ad-bg: #fff8ef;
+  --ad-text: #9a6a45;
+  --level-bg: #f5cfbb;
+  --level-text: #8a4c2c;
+  --dot-ok: #45b975;
+  --dot-bad: #ee6b5b;
+  --pill-bg: rgba(242, 106, 61, 0.12);
+  --pill-border: rgba(242, 106, 61, 0.35);
+  --pill-text: #a4411b;
+  --focus-ring: rgba(242, 106, 61, 0.18);
+  --accent-shadow: 0 10px 24px rgba(242, 106, 61, 0.22);
+  --accent-shadow-strong: 0 12px 26px rgba(242, 106, 61, 0.32);
+  --shadow: 0 10px 28px rgba(50, 40, 30, 0.14);
+  --body-bg:
+    radial-gradient(circle at 12% 18%, rgba(255, 206, 160, 0.18), transparent 55%),
+    radial-gradient(circle at 85% 18%, rgba(157, 194, 255, 0.14), transparent 55%),
+    linear-gradient(160deg, #f6f1ea 0%, #f3f0f8 55%, #eef4f7 100%);
+}
+
+:root[data-theme="dark"] {
+  --bg: #151311;
+  --bg-accent: #1c1916;
+  --ink: #f2ece6;
+  --muted: #b0a6a0;
+  --card: #1b1916;
+  --card-strong: #221f1b;
+  --card-subtle: #1f1c18;
+  --border: #3b332c;
+  --border-strong: #4a4037;
+  --accent: #ff8a5b;
+  --accent-strong: #ff7648;
+  --accent-soft: #4a2c21;
+  --chip-bg: #2a251f;
+  --chip-text: #e2cbb7;
+  --input-bg: #1b1815;
+  --success-bg: #1d2a22;
+  --success-border: #2f5a3e;
+  --success-text: #8fe3b1;
+  --error-bg: #2c1c1c;
+  --error-border: #6a3a35;
+  --error-text: #f29b93;
+  --ad-bg: #221e19;
+  --ad-text: #d2b39a;
+  --level-bg: #3a2b23;
+  --level-text: #f3c9ae;
+  --dot-ok: #56d58d;
+  --dot-bad: #f4776b;
+  --pill-bg: rgba(255, 138, 91, 0.16);
+  --pill-border: rgba(255, 138, 91, 0.4);
+  --pill-text: #ffd2bf;
+  --focus-ring: rgba(255, 138, 91, 0.25);
+  --accent-shadow: 0 10px 24px rgba(255, 138, 91, 0.2);
+  --accent-shadow-strong: 0 12px 26px rgba(255, 138, 91, 0.28);
+  --shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  --body-bg:
+    radial-gradient(circle at 15% 15%, rgba(255, 138, 91, 0.08), transparent 55%),
+    radial-gradient(circle at 85% 18%, rgba(120, 160, 255, 0.08), transparent 55%),
+    linear-gradient(160deg, #141311 0%, #1b1916 55%, #151311 100%);
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
 }
