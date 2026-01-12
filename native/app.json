@@ -21,10 +21,16 @@
         "backgroundColor": "#f5f1ea"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.expoxter.mathtraininglab"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "35774754-4651-42c0-9fc1-7c41df571028"
+      }
     }
   }
 }
