@@ -29,6 +29,7 @@ import {
   getAverageMs,
   getTargetMs,
   getWeakestSkill,
+  MAX_LEVEL,
   pickSkill,
   SKILL_LABELS,
   type Mode,
@@ -41,7 +42,11 @@ import {
 const STORAGE_KEY = "math-training-state";
 const THEME_KEY = "math-training-theme";
 const SETTINGS_KEY = "math-training-settings";
-const DEFAULT_SETTINGS = { questionCount: 10, timeLimitSeconds: 10 };
+const DEFAULT_SETTINGS = {
+  questionCount: 10,
+  timeLimitSeconds: 10,
+  negativeLevel: 0,
+};
 
 type Feedback = {
   correct: boolean;
@@ -59,6 +64,7 @@ type Screen = "menu" | "drill" | "settings" | "summary" | "stats";
 type Settings = {
   questionCount: number;
   timeLimitSeconds: number;
+  negativeLevel: number;
 };
 
 type Theme = {
@@ -157,10 +163,16 @@ const darkTheme: Theme = {
 const formatMs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 const formatSeconds = (value: number) => `${String(value).padStart(2, "0")}s`;
 
-const createQuestion = (selectedMode: Mode, snapshot: Stats) => {
+const createQuestion = (
+  selectedMode: Mode,
+  snapshot: Stats,
+  negativeLevel: number
+) => {
   const skill = selectedMode === "mix" ? pickSkill(snapshot) : selectedMode;
   const level = snapshot[skill].level;
-  return generateQuestion(skill, level);
+  const allowNegative =
+    skill === "sub" && negativeLevel > 0 && level >= negativeLevel;
+  return generateQuestion(skill, level, { allowNegative });
 };
 
 export default function App() {
@@ -220,10 +232,14 @@ export default function App() {
         const savedSettings = await AsyncStorage.getItem(SETTINGS_KEY);
         if (savedSettings) {
           const parsed = JSON.parse(savedSettings) as Partial<Settings>;
-          setSettings((prev) => ({
-            questionCount: parsed.questionCount ?? prev.questionCount,
-            timeLimitSeconds: parsed.timeLimitSeconds ?? prev.timeLimitSeconds,
-          }));
+          setSettings((prev) => {
+            const nextNegative = parsed.negativeLevel ?? prev.negativeLevel;
+            return {
+              questionCount: parsed.questionCount ?? prev.questionCount,
+              timeLimitSeconds: parsed.timeLimitSeconds ?? prev.timeLimitSeconds,
+              negativeLevel: Math.min(Math.max(nextNegative, 0), MAX_LEVEL),
+            };
+          });
           if (typeof parsed.timeLimitSeconds === "number") {
             setTimeLeft(parsed.timeLimitSeconds);
           }
@@ -328,10 +344,14 @@ export default function App() {
       setSession({ correct: 0, wrong: 0 });
       setQuestionIndex(1);
       setScreen("drill");
-      const nextQuestion = createQuestion(nextMode, statsRef.current);
+      const nextQuestion = createQuestion(
+        nextMode,
+        statsRef.current,
+        settings.negativeLevel
+      );
       beginQuestion(nextQuestion);
     },
-    [beginQuestion, clearAdvanceTimer]
+    [beginQuestion, clearAdvanceTimer, settings.negativeLevel]
   );
 
   const goToMenu = useCallback(() => {
@@ -384,6 +404,10 @@ export default function App() {
       setError("Tap numbers to continue.");
       return;
     }
+    if (cleaned === "-") {
+      setError("Finish the number.");
+      return;
+    }
 
     const numeric = Number(cleaned);
     if (!Number.isFinite(numeric)) {
@@ -399,7 +423,7 @@ export default function App() {
   }, [answered, answer, applyResult, clearAdvanceTimer, question]);
 
   const handleKeypadPress = useCallback(
-    (key: string) => {
+    (key: string, allowNegativeAnswer: boolean) => {
       if (answered) {
         return;
       }
@@ -412,9 +436,30 @@ export default function App() {
         setAnswer((prev) => prev.slice(0, -1));
         return;
       }
+      if (key === "-") {
+        if (!allowNegativeAnswer) {
+          return;
+        }
+        setAnswer((prev) => {
+          if (prev.startsWith("-")) {
+            return prev.slice(1);
+          }
+          if (prev.length === 0) {
+            return "-";
+          }
+          if (prev === "0") {
+            return "-0";
+          }
+          return `-${prev}`;
+        });
+        return;
+      }
       setAnswer((prev) => {
         if (prev === "0") {
           return key;
+        }
+        if (prev === "-0") {
+          return `-${key}`;
         }
         return prev + key;
       });
@@ -435,7 +480,11 @@ export default function App() {
       return;
     }
     setQuestionIndex(nextIndex);
-    const nextQuestion = createQuestion(modeRef.current, statsRef.current);
+    const nextQuestion = createQuestion(
+      modeRef.current,
+      statsRef.current,
+      settings.negativeLevel
+    );
     beginQuestion(nextQuestion);
   }, [
     answered,
@@ -443,6 +492,7 @@ export default function App() {
     clearAdvanceTimer,
     question,
     questionIndex,
+    settings.negativeLevel,
     settings.questionCount,
   ]);
 
@@ -475,6 +525,13 @@ export default function App() {
     setSettings((prev) => {
       const next = Math.min(Math.max(prev.timeLimitSeconds + delta, 5), 60);
       return { ...prev, timeLimitSeconds: next };
+    });
+  };
+
+  const adjustNegativeLevel = (delta: number) => {
+    setSettings((prev) => {
+      const next = Math.min(Math.max(prev.negativeLevel + delta, 0), MAX_LEVEL);
+      return { ...prev, negativeLevel: next };
     });
   };
 
@@ -528,12 +585,25 @@ export default function App() {
   );
   const weakestSkill = getWeakestSkill(stats);
   const weaknessText = hasAttempts ? SKILL_LABELS[weakestSkill] : "No data yet";
-  const keypadRows = [
-    ["7", "8", "9"],
-    ["4", "5", "6"],
-    ["1", "2", "3"],
-    ["CLR", "0", "DEL"],
-  ];
+  const allowNegativeAnswer = Boolean(
+    question &&
+      question.skill === "sub" &&
+      settings.negativeLevel > 0 &&
+      question.level >= settings.negativeLevel
+  );
+  const keypadRows = allowNegativeAnswer
+    ? [
+        ["7", "8", "9"],
+        ["4", "5", "6"],
+        ["1", "2", "3"],
+        ["-", "0", "DEL", "CLR"],
+      ]
+    : [
+        ["7", "8", "9"],
+        ["4", "5", "6"],
+        ["1", "2", "3"],
+        ["CLR", "0", "DEL"],
+      ];
   const skillKeys: SkillKey[] = ["add", "sub", "mul", "div"];
   const menuItems = [
     {
@@ -623,6 +693,14 @@ export default function App() {
             <View style={styles.metaBadge}>
               <Text style={styles.metaBadgeText}>
                 Weakest: {weaknessText}
+              </Text>
+            </View>
+            <View style={styles.metaBadge}>
+              <Text style={styles.metaBadgeText}>
+                Negatives:{" "}
+                {settings.negativeLevel === 0
+                  ? "Off"
+                  : `Lvl ${settings.negativeLevel}+`}
               </Text>
             </View>
           </View>
@@ -748,7 +826,9 @@ export default function App() {
                         return (
                           <Pressable
                             key={key}
-                            onPress={() => handleKeypadPress(key)}
+                            onPress={() =>
+                              handleKeypadPress(key, allowNegativeAnswer)
+                            }
                             disabled={answered}
                             style={({ pressed }) => [
                               styles.keypadButton,
@@ -1030,6 +1110,42 @@ export default function App() {
             </Text>
             <Pressable
               onPress={() => adjustTimeLimit(5)}
+              style={({ pressed }) => [
+                styles.stepperButton,
+                pressed && styles.stepperButtonPressed,
+              ]}
+            >
+              <Text style={styles.stepperButtonText}>+</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.settingRow}>
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>
+              Negative answers (subtraction)
+            </Text>
+            <Text style={styles.settingHint}>
+              Start showing negatives from a level.
+            </Text>
+          </View>
+          <View style={styles.stepper}>
+            <Pressable
+              onPress={() => adjustNegativeLevel(-1)}
+              style={({ pressed }) => [
+                styles.stepperButton,
+                pressed && styles.stepperButtonPressed,
+              ]}
+            >
+              <Text style={styles.stepperButtonText}>-</Text>
+            </Pressable>
+            <Text style={styles.stepperValue}>
+              {settings.negativeLevel === 0
+                ? "Off"
+                : `Level ${settings.negativeLevel}+`}
+            </Text>
+            <Pressable
+              onPress={() => adjustNegativeLevel(1)}
               style={({ pressed }) => [
                 styles.stepperButton,
                 pressed && styles.stepperButtonPressed,

@@ -29,36 +29,62 @@ const LEVELS: Record<SkillKey, LevelSpec[]> = {
   add: [
     { maxA: 10, maxB: 10 },
     { maxA: 20, maxB: 20 },
+    { maxA: 30, maxB: 30 },
     { maxA: 50, maxB: 50 },
+    { maxA: 75, maxB: 75 },
     { maxA: 100, maxB: 100 },
+    { maxA: 150, maxB: 150 },
     { maxA: 250, maxB: 250 },
+    { maxA: 500, maxB: 500 },
     { maxA: 1000, maxB: 1000 },
+    { maxA: 1500, maxB: 1500 },
+    { maxA: 2000, maxB: 2000 },
   ],
   sub: [
     { maxA: 10, maxB: 10 },
     { maxA: 20, maxB: 20 },
+    { maxA: 30, maxB: 30 },
     { maxA: 50, maxB: 50 },
+    { maxA: 75, maxB: 75 },
     { maxA: 100, maxB: 100 },
+    { maxA: 150, maxB: 150 },
     { maxA: 250, maxB: 250 },
+    { maxA: 500, maxB: 500 },
     { maxA: 1000, maxB: 1000 },
+    { maxA: 1500, maxB: 1500 },
+    { maxA: 2000, maxB: 2000 },
   ],
   mul: [
     { maxA: 5, maxB: 5 },
     { maxA: 9, maxB: 9 },
     { maxA: 12, maxB: 12 },
-    { maxA: 20, maxB: 15 },
-    { maxA: 30, maxB: 20 },
-    { maxA: 50, maxB: 30 },
+    { maxA: 15, maxB: 15 },
+    { maxA: 20, maxB: 20 },
+    { maxA: 25, maxB: 25 },
+    { maxA: 30, maxB: 30 },
+    { maxA: 40, maxB: 40 },
+    { maxA: 50, maxB: 50 },
+    { maxA: 60, maxB: 60 },
+    { maxA: 75, maxB: 75 },
+    { maxA: 90, maxB: 90 },
   ],
   div: [
     { minA: 1, maxA: 5, minB: 0, maxB: 5 },
     { minA: 1, maxA: 9, minB: 0, maxB: 9 },
     { minA: 1, maxA: 12, minB: 0, maxB: 12 },
+    { minA: 2, maxA: 15, minB: 0, maxB: 12 },
     { minA: 2, maxA: 20, minB: 0, maxB: 15 },
     { minA: 2, maxA: 25, minB: 0, maxB: 20 },
-    { minA: 2, maxA: 50, minB: 0, maxB: 30 },
+    { minA: 3, maxA: 30, minB: 0, maxB: 25 },
+    { minA: 3, maxA: 40, minB: 0, maxB: 30 },
+    { minA: 4, maxA: 50, minB: 0, maxB: 40 },
+    { minA: 5, maxA: 60, minB: 0, maxB: 50 },
+    { minA: 6, maxA: 75, minB: 0, maxB: 60 },
+    { minA: 8, maxA: 90, minB: 0, maxB: 70 },
   ],
 };
+
+export const MAX_LEVEL = LEVELS.add.length;
 
 const SKILL_LIST: SkillKey[] = ["add", "sub", "mul", "div"];
 
@@ -129,8 +155,8 @@ export const getAverageMs = (stats: SkillStats) => {
 
 export const getTargetMs = (level: number) => {
   const base = 6000;
-  const drop = 500;
-  return clamp(base - level * drop, 2200, 6000);
+  const drop = 300;
+  return clamp(base - level * drop, 2400, 6000);
 };
 
 export const getWeakestSkill = (stats: Stats): SkillKey => {
@@ -209,7 +235,11 @@ export const updateStats = (
   };
 };
 
-export const generateQuestion = (skill: SkillKey, level: number): Question => {
+export const generateQuestion = (
+  skill: SkillKey,
+  level: number,
+  options?: { allowNegative?: boolean }
+): Question => {
   const spec = getLevelSpec(skill, level);
   const minA = spec.minA ?? 0;
   const minB = spec.minB ?? 0;
@@ -227,8 +257,9 @@ export const generateQuestion = (skill: SkillKey, level: number): Question => {
   }
 
   if (skill === "sub") {
-    const high = spec.allowNegative ? a : Math.max(a, b);
-    const low = spec.allowNegative ? b : Math.min(a, b);
+    const allowNegative = options?.allowNegative ?? spec.allowNegative ?? false;
+    const high = allowNegative ? a : Math.max(a, b);
+    const low = allowNegative ? b : Math.min(a, b);
     return {
       id: `${skill}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       text: `${high} - ${low}`,
