@@ -21,8 +21,10 @@ button:focus-visible {
 }
 
 .appBar {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 10;
   background: var(--card);
   border-bottom: 1px solid var(--border);
@@ -35,7 +37,8 @@ button:focus-visible {
   gap: 16px;
   max-width: 920px;
   margin: 0 auto;
-  padding: 14px clamp(18px, 4vw, 40px);
+  padding: 0 clamp(18px, 4vw, 40px);
+  height: 64px;
 }
 
 .appBarLeft {
@@ -100,7 +103,7 @@ button:focus-visible {
   flex: 1;
   width: min(920px, 100%);
   margin: 0 auto;
-  padding: 18px clamp(18px, 4vw, 40px) 80px;
+  padding: calc(18px + 64px) clamp(18px, 4vw, 40px) 80px;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -471,6 +474,10 @@ button:focus-visible {
 
 .secondaryButton:active {
   transform: translateY(1px);
+}
+
+.fullWidthButton {
+  width: 100%;
 }
 
 .buttonDisabled {

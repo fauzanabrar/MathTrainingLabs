@@ -258,6 +258,39 @@ export default function Home() {
     setAnswered(false);
   }, [clearAdvanceTimer]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.history.replaceState({ screen: "menu" }, "");
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (screen === "menu") {
+      window.history.replaceState({ screen: "menu" }, "");
+      return;
+    }
+    window.history.pushState({ screen }, "");
+  }, [screen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const handlePopState = () => {
+      if (screen !== "menu") {
+        goToMenu();
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [goToMenu, screen]);
+
   const applyResult = useCallback(
     (correct: boolean, elapsed: number, timedOut = false) => {
       if (!question) {
@@ -980,7 +1013,11 @@ export default function Home() {
           Reset all stats
         </button>
 
-        <button type="button" onClick={goToMenu} className={styles.secondaryButton}>
+        <button
+          type="button"
+          onClick={goToMenu}
+          className={`${styles.secondaryButton} ${styles.fullWidthButton}`}
+        >
           Back to menu
         </button>
       </section>
