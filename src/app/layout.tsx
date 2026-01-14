@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Outfit, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import Script from "next/script";
 
 const outfit = Outfit({
   variable: "--font-sans",
@@ -52,6 +53,10 @@ export default function RootLayout({
       <body className={`${outfit.variable} ${spaceGrotesk.variable}`}>
         <ServiceWorkerRegister />
         {children}
+        <Script
+          src="https://pl28480662.effectivegatecpm.com/5b/9e/bf/5b9ebf11a1c5d7a7e97f435c53621ae2.js"
+          strategy="beforeInteractive"
+        />
       </body>
     </html>
   );
