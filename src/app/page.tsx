@@ -19,6 +19,7 @@ import {
   type Stats,
   updateStats,
 } from "@/lib/math";
+import { showPopUnder } from "@/components/PopUnderAd";
 
 const STORAGE_KEY = "math-training-state";
 const THEME_KEY = "math-training-theme";
@@ -440,6 +441,7 @@ export default function Home() {
       setScreen("summary");
       setQuestion(null);
       setAnswered(false);
+      showPopUnder(); // Call showPopUnder here
       return;
     }
     setQuestionIndex(nextIndex);
