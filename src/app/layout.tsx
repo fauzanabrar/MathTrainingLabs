@@ -70,7 +70,9 @@ export const metadata: Metadata = {
       "max-video-preview": -1,
     },
   },
-  canonical: "/",
+  verification: {
+    google: "UROymNDYN_iCupa77i48MAviKpdv9jsuIuRBWmSplJ4",
+  },
   authors: [
     {
       name: "Math Training Lab",
