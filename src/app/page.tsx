@@ -24,11 +24,13 @@ import { showPopUnder } from "@/components/PopUnderAd";
 const STORAGE_KEY = "math-training-state";
 const THEME_KEY = "math-training-theme";
 const SETTINGS_KEY = "math-training-settings";
+const MISTAKES_KEY = "math-training-mistakes";
 const DEFAULT_SETTINGS = {
   questionCount: 10,
   timeLimitSeconds: 10,
   negativeLevel: 0,
 };
+const MAX_MISTAKES = 50;
 const ADSTERRA_SCRIPT_SRC =
   "https://pl28463616.effectivegatecpm.com/9c9ea4fbff8dd33e714120c2cb2ec0d5/invoke.js";
 const ADSTERRA_CONTAINER_ID = "container-9c9ea4fbff8dd33e714120c2cb2ec0d5";
@@ -43,6 +45,16 @@ type Feedback = {
   timedOut?: boolean;
 };
 
+type MistakeItem = {
+  id: string;
+  text: string;
+  answer: number;
+  skill: SkillKey;
+  level: number;
+  misses: number;
+  lastMissedAt: number;
+};
+
 type Screen = "menu" | "drill" | "settings" | "summary" | "stats";
 
 type Settings = {
@@ -51,8 +63,354 @@ type Settings = {
   negativeLevel: number;
 };
 
+type SessionKind = "standard" | "mistakes";
+
+type MenuAction = { type: "mode"; mode: Mode } | { type: "mistakes" };
+
+type MenuItem = {
+  key: string;
+  label: string;
+  subtitle: string;
+  icon: string;
+  action: MenuAction;
+  disabled: boolean;
+};
+
 const formatMs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 const formatSeconds = (value: number) => `${String(value).padStart(2, "0")}s`;
+
+const isSkillKey = (value: unknown): value is SkillKey =>
+  value === "add" || value === "sub" || value === "mul" || value === "div";
+
+const makeMistakeId = (question: Question) =>
+  `${question.skill}:${question.text}`;
+
+const normalizeMistakes = (value: unknown): MistakeItem[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const cleaned: MistakeItem[] = [];
+  value.forEach((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return;
+    }
+    const item = entry as Partial<MistakeItem>;
+    if (typeof item.text !== "string" || !isSkillKey(item.skill)) {
+      return;
+    }
+    const answer = Number(item.answer);
+    if (!Number.isFinite(answer)) {
+      return;
+    }
+    const level = Number(item.level);
+    const misses = Number(item.misses);
+    const lastMissedAt = Number(item.lastMissedAt);
+    cleaned.push({
+      id:
+        typeof item.id === "string"
+          ? item.id
+          : `${item.skill}:${item.text}`,
+      text: item.text,
+      answer,
+      skill: item.skill,
+      level: Number.isFinite(level) ? level : 1,
+      misses: Number.isFinite(misses) && misses > 0 ? misses : 1,
+      lastMissedAt: Number.isFinite(lastMissedAt) ? lastMissedAt : Date.now(),
+    });
+  });
+  return cleaned.slice(0, MAX_MISTAKES);
+};
+
+const addMistakeEntry = (
+  items: MistakeItem[],
+  question: Question
+): MistakeItem[] => {
+  const id = makeMistakeId(question);
+  const now = Date.now();
+  const existingIndex = items.findIndex((item) => item.id === id);
+  if (existingIndex === -1) {
+    return [
+      {
+        id,
+        text: question.text,
+        answer: question.answer,
+        skill: question.skill,
+        level: question.level,
+        misses: 1,
+        lastMissedAt: now,
+      },
+      ...items,
+    ].slice(0, MAX_MISTAKES);
+  }
+  const next = [...items];
+  const existing = next[existingIndex];
+  next.splice(existingIndex, 1);
+  return [
+    {
+      ...existing,
+      answer: question.answer,
+      level: question.level,
+      misses: existing.misses + 1,
+      lastMissedAt: now,
+    },
+    ...next,
+  ].slice(0, MAX_MISTAKES);
+};
+
+const removeMistakeEntry = (items: MistakeItem[], question: Question) =>
+  items.filter((item) => item.id !== makeMistakeId(question));
+
+const buildMistakeQuestion = (item: MistakeItem): Question => ({
+  id: `${item.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  text: item.text,
+  answer: item.answer,
+  skill: item.skill,
+  level: item.level,
+});
+
+const parseOperands = (text: string) => {
+  const parts = text.split(" ");
+  if (parts.length !== 3) {
+    return null;
+  }
+  const left = Number(parts[0]);
+  const right = Number(parts[2]);
+  if (!Number.isFinite(left) || !Number.isFinite(right)) {
+    return null;
+  }
+  return { left, right };
+};
+
+const roundToBase = (value: number, base: number) =>
+  Math.round(value / base) * base;
+
+const formatAdjustment = (delta: number) =>
+  delta > 0 ? `add ${delta}` : `subtract ${Math.abs(delta)}`;
+
+const gcd = (a: number, b: number) => {
+  let x = Math.abs(a);
+  let y = Math.abs(b);
+  while (y !== 0) {
+    const next = x % y;
+    x = y;
+    y = next;
+  }
+  return x;
+};
+
+const getTipForQuestion = (question: Question) => {
+  const parsed = parseOperands(question.text);
+  if (!parsed) {
+    return "Break the problem into smaller chunks.";
+  }
+  const { left, right } = parsed;
+  if (question.skill === "add") {
+    if (left === right) {
+      return `Double ${left}.`;
+    }
+    if ((left % 10) + (right % 10) === 10) {
+      return "Ones make 10. Add tens and carry a ten.";
+    }
+    const big = Math.max(left, right);
+    const small = big === left ? right : left;
+    const shift = (10 - (big % 10)) % 10;
+    if (shift > 0 && shift <= 4 && small >= shift) {
+      return `Shift ${shift} from ${small} to ${big} to make ${
+        big + shift
+      }, then add ${small - shift}.`;
+    }
+    const round10 = roundToBase(small, 10);
+    const adjust10 = round10 - small;
+    if (Math.abs(adjust10) <= 2 && adjust10 !== 0) {
+      return `Round ${small} to ${round10}, then ${formatAdjustment(
+        -adjust10
+      )}.`;
+    }
+    const round100 = roundToBase(small, 100);
+    const adjust100 = round100 - small;
+    if (Math.abs(adjust100) <= 5 && adjust100 !== 0) {
+      return `Round ${small} to ${round100}, then ${formatAdjustment(
+        -adjust100
+      )}.`;
+    }
+    const tens = Math.floor(small / 10) * 10;
+    const ones = small - tens;
+    if (tens !== 0 && ones !== 0) {
+      return `Split ${small} into ${tens} + ${ones}. Add ${tens} then ${ones}.`;
+    }
+    return `Count up ${small} from ${big}.`;
+  }
+  if (question.skill === "sub") {
+    if (left === right) {
+      return "Same numbers cancel to zero.";
+    }
+    if (left < right) {
+      return `Find ${right} - ${left}, then make it negative.`;
+    }
+    const diff = left - right;
+    if (diff <= 10) {
+      return `Count up from ${right} to ${left} in small hops.`;
+    }
+    const rightOnes = right % 10;
+    if (rightOnes === 9) {
+      return `Subtract ${right + 1}, then add 1.`;
+    }
+    if (rightOnes === 8) {
+      return `Subtract ${right + 2}, then add 2.`;
+    }
+    if (rightOnes === 1) {
+      return `Subtract ${right - 1}, then subtract 1.`;
+    }
+    const round10 = roundToBase(right, 10);
+    const adjust10 = round10 - right;
+    if (Math.abs(adjust10) <= 2 && adjust10 !== 0) {
+      return `Subtract ${round10}, then ${formatAdjustment(adjust10)}.`;
+    }
+    const leftOnes = left % 10;
+    if (leftOnes !== 0 && right >= leftOnes) {
+      const remaining = right - leftOnes;
+      if (remaining === 0) {
+        return `Jump to a ten: subtract ${leftOnes} to reach a round ten.`;
+      }
+      return `Jump to a ten: subtract ${leftOnes}, then subtract ${remaining}.`;
+    }
+    if (left >= 100 && left % 100 === 0 && right < 100) {
+      const toHundred = 100 - right;
+      return `Use complements: ${left} - ${right} = (${left} - 100) + ${toHundred}.`;
+    }
+    const tens = Math.floor(right / 10) * 10;
+    const ones = right - tens;
+    if (tens !== 0 && ones !== 0) {
+      return `Subtract ${tens}, then subtract ${ones}.`;
+    }
+    return `Subtract ${right} in one step.`;
+  }
+  if (question.skill === "mul") {
+    if (left === 0 || right === 0) {
+      return "Anything times 0 is 0.";
+    }
+    if (left === 1 || right === 1) {
+      return "Anything times 1 stays the same.";
+    }
+    const big = Math.max(left, right);
+    const small = big === left ? right : left;
+    if (small === 2) {
+      return `Double ${big}.`;
+    }
+    if (small === 3) {
+      return `Double ${big}, then add ${big}.`;
+    }
+    if (small === 4) {
+      return `Double ${big} twice.`;
+    }
+    if (small === 5) {
+      return `Do ${big} x 10, then halve it.`;
+    }
+    if (small === 6) {
+      return `Do ${big} x 3, then double.`;
+    }
+    if (small === 7) {
+      return `Use 5x + 2x: ${big} x 7 = ${big} x 5 + ${big} x 2.`;
+    }
+    if (small === 8) {
+      return `Double ${big} three times.`;
+    }
+    if (small === 9) {
+      return `Do ${big} x 10, then subtract ${big}.`;
+    }
+    if (small === 11) {
+      return `Do ${big} x 10, then add ${big}.`;
+    }
+    if (small === 12) {
+      return `Do ${big} x 10 plus ${big} x 2.`;
+    }
+    if (small > 10 && small < 20) {
+      const extra = small - 10;
+      return `Use ${big} x 10 plus ${big} x ${extra}.`;
+    }
+    if (small === 15) {
+      return `Do ${big} x 10 plus ${big} x 5.`;
+    }
+    if (small === 25) {
+      return `Do ${big} x 100, then divide by 4.`;
+    }
+    if (small === 50) {
+      return `Do ${big} x 100, then halve it.`;
+    }
+    if (small === 100) {
+      return `Add two zeros to ${big}.`;
+    }
+    if (left % 2 === 0 && right % 10 === 5) {
+      return `Halve ${left} and double ${right} to make a round number.`;
+    }
+    if (right % 2 === 0 && left % 10 === 5) {
+      return `Halve ${right} and double ${left} to make a round number.`;
+    }
+    if (small % 10 === 9) {
+      return `Use near-10: ${big} x ${small} = ${big} x ${
+        small + 1
+      } - ${big}.`;
+    }
+    if (small % 10 === 1 && small > 1) {
+      return `Use near-10: ${big} x ${small} = ${big} x ${
+        small - 1
+      } + ${big}.`;
+    }
+    const tens = Math.floor(big / 10) * 10;
+    const ones = big - tens;
+    if (tens !== 0 && ones !== 0) {
+      return `Split ${big} into ${tens} + ${ones}: ${small} x ${tens} + ${small} x ${ones}.`;
+    }
+    return "Break one factor and multiply in parts.";
+  }
+  if (question.skill === "div") {
+    if (right === 1) {
+      return "Divide by 1 stays the same.";
+    }
+    if (right === 2) {
+      return "Half it.";
+    }
+    if (right === 4) {
+      return "Half it twice.";
+    }
+    if (right === 5) {
+      return "Divide by 10, then double.";
+    }
+    if (right === 8) {
+      return "Half it three times.";
+    }
+    if (right === 10) {
+      return "Drop one zero if possible.";
+    }
+    if (right === 25) {
+      return "Divide by 100, then multiply by 4.";
+    }
+    if (right === 50) {
+      return "Divide by 100, then double.";
+    }
+    if (right === 100) {
+      return "Drop two zeros if possible.";
+    }
+    if (left % 100 === 0 && right % 100 === 0) {
+      return `Cancel two zeros: ${left / 100} / ${right / 100}.`;
+    }
+    if (left % 10 === 0 && right % 10 === 0) {
+      return `Cancel one zero: ${left / 10} / ${right / 10}.`;
+    }
+    const common = gcd(left, right);
+    if (common >= 2 && common !== right) {
+      return `Simplify first: divide both numbers by ${common}.`;
+    }
+    const factor = [3, 4, 5, 8, 6, 9, 12, 2].find(
+      (value) => right % value === 0 && value !== right
+    );
+    if (factor) {
+      return `Split the divisor: divide by ${factor}, then by ${right / factor}.`;
+    }
+    return `Use multiplication: ${right} x ? = ${left}.`;
+  }
+  return "Break the problem into smaller chunks.";
+};
 
 const createQuestion = (
   selectedMode: Mode,
@@ -119,8 +477,12 @@ export default function Home() {
   const [mode, setMode] = useState<Mode>("mix");
   const [screen, setScreen] = useState<Screen>("menu");
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [mistakes, setMistakes] = useState<MistakeItem[]>([]);
+  const [sessionKind, setSessionKind] = useState<SessionKind>("standard");
+  const [mistakeQueue, setMistakeQueue] = useState<MistakeItem[]>([]);
   const [question, setQuestion] = useState<Question | null>(null);
   const [answer, setAnswer] = useState("");
+  const [showTip, setShowTip] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -169,6 +531,15 @@ export default function Home() {
         }
       } catch {
         // Ignore malformed settings.
+      }
+    }
+    const savedMistakes = localStorage.getItem(MISTAKES_KEY);
+    if (savedMistakes) {
+      try {
+        const parsed = JSON.parse(savedMistakes);
+        setMistakes(normalizeMistakes(parsed));
+      } catch {
+        // Ignore malformed mistakes.
       }
     }
     setReady(true);
@@ -225,6 +596,13 @@ export default function Home() {
   }, [ready, settings]);
 
   useEffect(() => {
+    if (!ready) {
+      return;
+    }
+    localStorage.setItem(MISTAKES_KEY, JSON.stringify(mistakes));
+  }, [mistakes, ready]);
+
+  useEffect(() => {
     statsRef.current = stats;
   }, [stats]);
 
@@ -261,6 +639,7 @@ export default function Home() {
       setError(null);
       setFeedback(null);
       setAnswered(false);
+      setShowTip(false);
       startTimeRef.current = Date.now();
       setTimeLeft(settings.timeLimitSeconds);
     },
@@ -270,6 +649,8 @@ export default function Home() {
   const startSession = useCallback(
     (nextMode: Mode) => {
       clearAdvanceTimer();
+      setSessionKind("standard");
+      setMistakeQueue([]);
       setMode(nextMode);
       modeRef.current = nextMode;
       setSession({ correct: 0, wrong: 0 });
@@ -285,14 +666,41 @@ export default function Home() {
     [beginQuestion, clearAdvanceTimer, settings.negativeLevel]
   );
 
+  const startMistakeSession = useCallback(() => {
+    if (mistakes.length === 0) {
+      return;
+    }
+    clearAdvanceTimer();
+    const ordered = [...mistakes].sort((a, b) => {
+      if (b.misses !== a.misses) {
+        return b.misses - a.misses;
+      }
+      return b.lastMissedAt - a.lastMissedAt;
+    });
+    const queue = ordered.slice(0, settings.questionCount);
+    if (queue.length === 0) {
+      return;
+    }
+    setSessionKind("mistakes");
+    setMistakeQueue(queue);
+    setSession({ correct: 0, wrong: 0 });
+    setQuestionIndex(1);
+    setScreen("drill");
+    const nextQuestion = buildMistakeQuestion(queue[0]);
+    beginQuestion(nextQuestion);
+  }, [beginQuestion, clearAdvanceTimer, mistakes, settings.questionCount]);
+
   const goToMenu = useCallback(() => {
     clearAdvanceTimer();
+    setSessionKind("standard");
+    setMistakeQueue([]);
     setScreen("menu");
     setQuestion(null);
     setFeedback(null);
     setError(null);
     setAnswer("");
     setAnswered(false);
+    setShowTip(false);
   }, [clearAdvanceTimer]);
 
   useEffect(() => {
@@ -353,10 +761,16 @@ export default function Home() {
         correct: prev.correct + (correct ? 1 : 0),
         wrong: prev.wrong + (correct ? 0 : 1),
       }));
+      if (!correct) {
+        setMistakes((prev) => addMistakeEntry(prev, question));
+        setShowTip(true);
+      } else if (sessionKind === "mistakes") {
+        setMistakes((prev) => removeMistakeEntry(prev, question));
+      }
       setError(null);
       setAnswered(true);
     },
-    [question]
+    [question, sessionKind]
   );
 
   const handleSubmit = useCallback(() => {
@@ -436,8 +850,10 @@ export default function Home() {
       return;
     }
     clearAdvanceTimer();
+    const totalQuestions =
+      sessionKind === "mistakes" ? mistakeQueue.length : settings.questionCount;
     const nextIndex = questionIndex + 1;
-    if (nextIndex > settings.questionCount) {
+    if (nextIndex > totalQuestions) {
       setScreen("summary");
       setQuestion(null);
       setAnswered(false);
@@ -445,6 +861,18 @@ export default function Home() {
       return;
     }
     setQuestionIndex(nextIndex);
+    if (sessionKind === "mistakes") {
+      const nextItem = mistakeQueue[nextIndex - 1];
+      if (!nextItem) {
+        setScreen("summary");
+        setQuestion(null);
+        setAnswered(false);
+        showPopUnder();
+        return;
+      }
+      beginQuestion(buildMistakeQuestion(nextItem));
+      return;
+    }
     const nextQuestion = createQuestion(
       modeRef.current,
       statsRef.current,
@@ -457,6 +885,8 @@ export default function Home() {
     clearAdvanceTimer,
     question,
     questionIndex,
+    mistakeQueue,
+    sessionKind,
     settings.negativeLevel,
     settings.questionCount,
   ]);
@@ -468,6 +898,14 @@ export default function Home() {
     const elapsed = Date.now() - startTimeRef.current;
     applyResult(false, elapsed, true);
   }, [answered, applyResult, question]);
+
+  const handlePracticeAgain = useCallback(() => {
+    if (sessionKind === "mistakes") {
+      startMistakeSession();
+      return;
+    }
+    startSession(mode);
+  }, [mode, sessionKind, startMistakeSession, startSession]);
 
   const resetStats = useCallback(() => {
     const fresh = createDefaultStats();
@@ -545,6 +983,8 @@ export default function Home() {
   );
   const weakestSkill = useMemo(() => getWeakestSkill(stats), [stats]);
   const weaknessText = hasAttempts ? SKILL_LABELS[weakestSkill] : "No data yet";
+  const hasMistakes = mistakes.length > 0;
+  const isMistakeSession = sessionKind === "mistakes";
   const allowNegativeAnswer = Boolean(
     question &&
       question.skill === "sub" &&
@@ -565,43 +1005,73 @@ export default function Home() {
         ["CLR", "0", "DEL"],
       ];
   const skillKeys: SkillKey[] = ["add", "sub", "mul", "div"];
-  const menuItems = [
+  const menuItems: MenuItem[] = [
     {
-      mode: "mix" as const,
+      key: "mix",
       label: "Random mix",
       subtitle: "Adaptive blend",
       icon: "M",
+      action: { type: "mode", mode: "mix" as const },
+      disabled: false,
     },
     {
-      mode: "add" as const,
+      key: "mistakes",
+      label: "Practice mistakes",
+      subtitle: hasMistakes
+        ? `Deliberate practice (${mistakes.length})`
+        : "No mistakes yet",
+      icon: "!",
+      action: { type: "mistakes" as const },
+      disabled: !hasMistakes,
+    },
+    {
+      key: "add",
       label: "Addition",
       subtitle: "Sum drills",
       icon: SKILL_SYMBOLS.add,
+      action: { type: "mode", mode: "add" as const },
+      disabled: false,
     },
     {
-      mode: "sub" as const,
+      key: "sub",
       label: "Subtraction",
       subtitle: "Minus drills",
       icon: SKILL_SYMBOLS.sub,
+      action: { type: "mode", mode: "sub" as const },
+      disabled: false,
     },
     {
-      mode: "mul" as const,
+      key: "mul",
       label: "Multiplication",
       subtitle: "Times tables",
       icon: SKILL_SYMBOLS.mul,
+      action: { type: "mode", mode: "mul" as const },
+      disabled: false,
     },
     {
-      mode: "div" as const,
+      key: "div",
       label: "Division",
       subtitle: "Quotient practice",
       icon: SKILL_SYMBOLS.div,
+      action: { type: "mode", mode: "div" as const },
+      disabled: false,
     },
   ];
   const totalAnswered = session.correct + session.wrong;
   const accuracy = totalAnswered
     ? Math.round((session.correct / totalAnswered) * 100)
     : 0;
-  const modeLabel = mode === "mix" ? "Random mix" : SKILL_LABELS[mode];
+  const modeLabel = isMistakeSession
+    ? "Mistake practice"
+    : mode === "mix"
+      ? "Random mix"
+      : SKILL_LABELS[mode];
+  const drillSub = isMistakeSession
+    ? "Deliberate practice to build speed on missed problems."
+    : "Answer fast and correct to level up.";
+  const sessionQuestionCount = isMistakeSession
+    ? mistakeQueue.length
+    : settings.questionCount;
   const timeLeftLabel = formatSeconds(timeLeft);
   const appBarTitle =
     screen === "menu"
@@ -628,6 +1098,7 @@ export default function Home() {
         ? `Time's up. Answer: ${feedback.expected}.`
         : `Not yet. Answer: ${feedback.expected}.`
     : "";
+  const tipText = question ? getTipForQuestion(question) : "";
 
   let content: React.ReactElement | null = null;
 
@@ -669,9 +1140,16 @@ export default function Home() {
         <div className={styles.menuGrid}>
           {menuItems.map((item) => (
             <button
-              key={item.mode}
-              onClick={() => startSession(item.mode)}
+              key={item.key}
+              onClick={() => {
+                if (item.action.type === "mistakes") {
+                  startMistakeSession();
+                  return;
+                }
+                startSession(item.action.mode);
+              }}
               type="button"
+              disabled={item.disabled}
               className={styles.menuButton}
             >
               <span className={styles.menuIcon}>{item.icon}</span>
@@ -709,7 +1187,7 @@ export default function Home() {
         <div className={styles.statusRow}>
           <div className={styles.statusPill}>
             <span className={styles.statusText}>
-              Question {questionIndex}/{settings.questionCount}
+              Question {questionIndex}/{sessionQuestionCount}
             </span>
           </div>
           <div
@@ -723,9 +1201,7 @@ export default function Home() {
 
         <section className={styles.card}>
           <h2 className={styles.sectionTitle}>{modeLabel} drill</h2>
-          <p className={styles.sectionSub}>
-            Answer fast and correct to level up.
-          </p>
+          <p className={styles.sectionSub}>{drillSub}</p>
 
           {question ? (
             <div className={styles.questionCard}>
@@ -842,6 +1318,14 @@ export default function Home() {
                   >
                     Next
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowTip((prev) => !prev)}
+                    aria-pressed={showTip}
+                    className={styles.secondaryButton}
+                  >
+                    {showTip ? "Hide tip" : "Show tip"}
+                  </button>
                 </div>
               </div>
 
@@ -855,6 +1339,12 @@ export default function Home() {
                   }`}
                 >
                   <span className={styles.feedbackText}>{feedbackText}</span>
+                </div>
+              ) : null}
+              {showTip ? (
+                <div className={styles.tipBox}>
+                  <span className={styles.tipLabel}>Tip</span>
+                  <span className={styles.tipText}>{tipText}</span>
                 </div>
               ) : null}
             </div>
@@ -996,10 +1486,13 @@ export default function Home() {
         </div>
         <button
           type="button"
-          onClick={() => startSession(mode)}
-          className={styles.primaryButton}
+          onClick={handlePracticeAgain}
+          disabled={isMistakeSession && !hasMistakes}
+          className={`${styles.primaryButton} ${
+            isMistakeSession && !hasMistakes ? styles.buttonDisabled : ""
+          }`}
         >
-          Practice again
+          {isMistakeSession ? "Practice mistakes again" : "Practice again"}
         </button>
         <button type="button" onClick={goToMenu} className={styles.secondaryButton}>
           Back to menu

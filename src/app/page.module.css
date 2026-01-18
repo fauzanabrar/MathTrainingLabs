@@ -178,6 +178,22 @@ button:focus-visible {
   transform: translateY(1px);
 }
 
+.menuButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  border-color: var(--border);
+  transform: none;
+}
+
+.menuButton:disabled:hover {
+  border-color: var(--border);
+}
+
+.menuButton:disabled .menuIcon {
+  background: var(--card-subtle);
+  color: var(--muted);
+}
+
 .menuIcon {
   width: 36px;
   height: 36px;
@@ -510,6 +526,31 @@ button:focus-visible {
 
 .feedbackText {
   font-weight: 600;
+}
+
+.tipBox {
+  border-radius: 12px;
+  border: 1px dashed var(--border-strong);
+  padding: 10px 12px;
+  background: var(--card-subtle);
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.tipLabel {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  font-weight: 700;
+  padding-top: 2px;
+}
+
+.tipText {
+  font-size: 0.85rem;
+  color: var(--ink);
+  line-height: 1.4;
 }
 
 .sessionRow {
