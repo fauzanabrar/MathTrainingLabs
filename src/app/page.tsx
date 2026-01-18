@@ -426,21 +426,9 @@ const createQuestion = (
 
 function AdsterraNativeBanner() {
   const injectedRef = useRef(false);
-  const [shouldShow, setShouldShow] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const adShownInSession = sessionStorage.getItem("adShown");
-    if (!adShownInSession) {
-      setShouldShow(true);
-      sessionStorage.setItem("adShown", "true");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!shouldShow || injectedRef.current || typeof document === "undefined") {
+    if (injectedRef.current || typeof document === "undefined") {
       return;
     }
     const container = document.getElementById(ADSTERRA_CONTAINER_ID);
@@ -459,11 +447,7 @@ function AdsterraNativeBanner() {
     const target = container.parentElement ?? document.body;
     target.appendChild(script);
     injectedRef.current = true;
-  }, [shouldShow]);
-
-  if (!shouldShow) {
-    return null;
-  }
+  }, []);
 
   return (
     <section className={styles.adSlot} aria-label="Sponsored content">
